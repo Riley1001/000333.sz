@@ -1,21 +1,19 @@
-install.packages(quantmod)
 library(quantmod)
-setSymbolLookup(MDGT=list(name='000333.sz',src='yahoo'))
-getSymbols("MDGT")
+setSymbolLookup(GZMT=list(name='600519.ss',src='yahoo'))
+getSymbols("GZMT")
 
-MDGT=data.frame(MDGT)
-N=nrow(MDGT)
-subdata=MDGT[1:(N-30),1:4]
+GZMT=data.frame(GZMT)
+N=nrow(GZMT)
+subdata=GZMT[1:(N-30),1:4]
 subdata=scale(subdata)
 center.back=attr(subdata,"scaled:center")
 scale.back=attr(subdata,"scaled:scale")
 
-install.packages("fUnitRoots")                
 library(fUnitRoots)
 for(i in 1:ncol(subdata))
 {
   pValue=adfTest(subdata[,i])@test$p.value
-  print(paste("指標",colnames(subdata)[i],"單位根檢驗的p值為:",pValue))
+  print(paste("指標",colnames(subdata)[i],"單位根檢驗的p值為:",1-pValue))
 }                    
 
 rowCol=dim(subdata)
@@ -24,18 +22,50 @@ lmlist=list()
 for(p in 1:10)
 {
   baseData=NULL
-  for (i in (p+1):rowCol[1])
-  {
-    baseData=rbind(baseData,c(as.vector(subdata[i,]),as.vector(subdata[(i-1):(i-p),])))
+  for(i in (p+1):rowCol[1])
+  {baseData=rbind(baseData,c(as.vector(subdata[i,]),as.vector(subdata[(i-1):(i-p),])))
   }
-  X=cbind(1,baseData[,rowCol([2]+1):ncol(baseData)])
-  Y=baseData[,1:(rowCol[2])]
-  coefmatrix=solve(t(X)%*%X)%*%t(X)%*%Y
-  aic=log(det(cov(Y-X%*%coefmatrix)))+2*(nrow(coefmatrix)-1)^2*p/nrow(baseData)
+  X=cbind(1,baseData[,(rowCol[2]+1):ncol(baseData)])
+  Y=baseData[,1:rowCol[2]]
+  coefMatrix=solve(t(X)%*%X)%*%t(X)%*%Y
+  aic=log(det(cov(Y-X%*%coefMatrix)))+2*(nrow(coefMatrix)-1)^2*p/nrow(baseData)
   aiclist=c(aiclist,aic)
-  lmlist=c(lmlist,list(coefmatrix))
+  lmlist=c(lmlist,list(coefMatrix))
 }
 
 data.frame(p=1:10,aiclist)
 
-#not fin
+p=which.min(aiclist)
+n=nrow(subdata)
+preddf=NULL
+subdata=data.frame(subdata)
+for(i in 1:30)
+{
+  predData=as.vector(subdata[(n+i-1):(n+i-p),])
+  preVals=c(1,t(predData)[,1])%*%lmlist[[p]]
+  preVals=preVals*scale.back+center.back
+  preddf=rbind(preddf,preVals)
+  subdata=rbind(subdata,(GZMT[n+i,1:4]-center.back)/scale.back)
+}
+
+
+rownames(preddf)=NULL
+subdata.test=GZMT[(N-30+1):N,1:4]
+summary(as.vector(abs(preddf-subdata.test)*100/subdata.test))
+
+par(mfrow=c(2,2))
+
+plot(preddf[,1],type='1',ylab='Open')
+lines(subdata.test[,1],lty=2,col='red')
+
+plot(preddf[,2],type='1',ylab='High')
+lines(subdata.test[,2],lty=2,col='red')
+
+plot(preddf[,3],type='1',ylab='Low')
+lines(subdata.test[,3],lty=2,col='red')
+
+plot(preddf[,4],type='1',ylab='Close')
+lines(subdata.test[,4],lty=2,col='red')
+
+par(mfrow=c(1,1))
+
